@@ -1,0 +1,172 @@
+import discord
+from discord.ext import commands
+from discord import app_commands
+
+# ==========================================
+# ⚙️ CONFIGURAZIONE - INSERISCI I TUOI ID QUI
+# ==========================================
+TOKEN = "MTU3MDM3MTUzNDczOTA3OTE3OQ.GX13iQ.KgehycrNWbPSPlouvQRFb7eAyqILNuJR-K2KOk"
+
+# ID dei Ruoli per Auto-Role
+RUOLO_ANNUNCI = 157037281438334979
+RUOLO_OFFERTE = 157037294504011369
+RUOLO_NOVITA = 157037300526626417
+RUOLO_SPOILER = 1570372876962631762
+
+# ID dei Ruoli Staff (Chi vede i ticket)
+RUOLO_FONDAZIONE = 1569613107909894214            # Vede tutti i ticket
+RUOLO_GRAPHIC_DESIGNER = 1570378377448136704 # Vede solo ticket Loghi/Banner
+RUOLO_LIVERY_DESIGNER = 1570379574087393341  # Vede solo ticket Livree/Uniformi
+
+# ID delle Categorie dove verranno creati i ticket (Opzionale: metti None se non vuoi categorie)
+CATEGORIA_TICKET_ORDINI = 1569663141543936102
+CATEGORIA_TICKET_SUPPORTO = 1569663141543936102
+
+# ID Canale Recensioni (Vouch)
+CANALE_VOUCH = 1570380411832369212
+
+# ==========================================
+# 🤖 INIZIALIZZAZIONE BOT
+# ==========================================
+class TpsBot(commands.Bot):
+    def __init__(self):
+        intents = discord.Intents.default()
+        intents.message_content = True
+        intents.members = True
+        super().__init__(command_prefix="!", intents=intents)
+
+    async def setup_hook(self):
+        # Registra le viste persistenti (funzionano anche se riavvii il bot!)
+        self.add_view(AutoRoleView())
+        self.add_view(TicketPanelView())
+        self.add_view(CloseTicketView())
+        await self.tree.sync()
+
+bot = TpsBot()
+
+# ==========================================
+# 🎭 1. SISTEMA AUTO-ROLE (CON SPOILER)
+# ==========================================
+class AutoRoleView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+
+    async def toggle_role(self, interaction: discord.Interaction, role_id: int, nome_ruolo: str):
+        role = interaction.guild.get_role(role_id)
+        if not role:
+            return await interaction.response.send_message("❌ Errore: Ruolo non trovato. Controlla l'ID nel codice.", ephemeral=True)
+        
+        if role in interaction.user.roles:
+            await interaction.user.remove_roles(role)
+            await interaction.response.send_message(f"➖ Rimosso il ruolo **{nome_ruolo}**.", ephemeral=True)
+        else:
+            await interaction.user.add_roles(role)
+            await interaction.response.send_message(f"➕ Assegnato il ruolo **{nome_ruolo}**!", ephemeral=True)
+
+    @discord.ui.button(label="📢 Annunci", style=discord.ButtonStyle.primary, custom_id="role_annunci")
+    async def btn_annunci(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self.toggle_role(interaction, RUOLO_ANNUNCI, "Annunci")
+
+    @discord.ui.button(label="💸 Offerte & Sconti", style=discord.ButtonStyle.success, custom_id="role_offerte")
+    async def btn_offerte(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self.toggle_role(interaction, RUOLO_OFFERTE, "Offerte & Sconti")
+
+    @discord.ui.button(label="🎨 Nuovi Prodotti", style=discord.ButtonStyle.secondary, custom_id="role_novita")
+    async def btn_novita(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self.toggle_role(interaction, RUOLO_NOVITA, "Nuovi Prodotti")
+
+    @discord.ui.button(label="👀 Spoiler", style=discord.ButtonStyle.secondary, custom_id="role_spoiler")
+    async def btn_spoiler(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self.toggle_role(interaction, RUOLO_SPOILER, "Spoiler")
+
+# ==========================================
+# 🎫 2. SISTEMA TICKET DINAMICI PER SEZIONE
+# ==========================================
+class CloseTicketView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+
+    @discord.ui.button(label="🔒 Chiudi Ticket", style=discord.ButtonStyle.danger, custom_id="close_ticket_btn")
+    async def close_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_message("⏳ Chiusura del ticket in 5 secondi...")
+        import asyncio
+        await asyncio.sleep(5)
+        await interaction.channel.delete()
+
+class TicketSelect(discord.ui.Select):
+    def __init__(self):
+        options = [
+            discord.SelectOption(
+                label="Ordina Logo / Banner",
+                description="Richiedi un logo o un banner personalizzato",
+                emoji="🎨",
+                value="grafica"
+            ),
+            discord.SelectOption(
+                label="Ordina Livrea / Uniforme ER:LC",
+                description="Commissiona livree veicoli o divise",
+                emoji="🚓",
+                value="livree"
+            ),
+            discord.SelectOption(
+                label="Supporto / Domande",
+                description="Hai bisogno di aiuto o info sugli ordini?",
+                emoji="❓",
+                value="supporto"
+            ),
+        ]
+        super().__init__(placeholder="Scegli il motivo del ticket...", min_values=1, max_values=1, options=options, custom_id="ticket_select_menu")
+
+    async def callback(self, interaction: discord.Interaction):
+        scelta = self.values[0]
+        guild = interaction.guild
+        user = interaction.user
+
+        # Controlla se l'utente ha già un ticket aperto
+        for channel in guild.text_channels:
+            if channel.topic == f"ticket-{user.id}":
+                return await interaction.response.send_message(f"⚠️ Hai già un ticket aperto: {channel.mention}", ephemeral=True)
+
+        # Imposta permessi base (Nessuno vede il ticket tranne l'utente, il bot e gli Admin)
+        overwrites = {
+            guild.default_role: discord.PermissionOverwrite(view_channel=False),
+            user: discord.PermissionOverwrite(view_channel=True, send_messages=True, attach_files=True, read_message_history=True),
+            guild.me: discord.PermissionOverwrite(view_channel=True, send_messages=True, manage_channels=True)
+        }
+
+        admin_role = guild.get_role(RUOLO_ADMIN)
+        if admin_role:
+            overwrites[admin_role] = discord.PermissionOverwrite(view_channel=True, send_messages=True)
+
+        # Personalizza permessi, categoria e messaggio in base alla scelta
+        if scelta == "grafica":
+            nome_canale = f"🎨・grafica-{user.name}"
+            categoria = guild.get_channel(CATEGORIA_TICKET_ORDINI)
+            staff_role = guild.get_role(RUOLO_GRAPHIC_DESIGNER)
+            titolo_embed = "🎨 Ordine Logo / Banner"
+            descrizione = (
+                f"Ciao {user.mention}, benvenuto nel reparto **Grafica** di **Tps_yildiz10 Hub**!\n\n"
+                "Per velocizzare il lavoro, scrivi qui sotto:\n"
+                "• **Cosa ti serve:** (Logo, Banner Discord, Icona)\n"
+                "• **Testo da inserire:**\n"
+                "• **Colori e stile preferiti:**\n"
+                "• **Budget / Metodo di pagamento:** (Robux o Euro)"
+            )
+        elif scelta == "livree":
+            nome_canale = f"🚓・livrea-{user.name}"
+            categoria = guild.get_channel(CATEGORIA_TICKET_ORDINI)
+            staff_role = guild.get_role(RUOLO_LIVERY_DESIGNER)
+            titolo_embed = "🚓 Ordine Livrea / Uniforme ER:LC"
+            descrizione = (
+                f"Ciao {user.mention}, benvenuto nel reparto **ER:LC Design** di **Tps_yildiz10 Hub**!\n\n"
+                "Compila queste informazioni per iniziare:\n"
+                "• **Veicolo/i o Dipartimento:** (es. Polizia, Vigili del Fuoco, EMS)\n"
+                "• **Dettagli / Scritte / Loghi da mettere:**\n"
+                "• **Eventuali immagini di riferimento:**"
+            )
+        else:
+            nome_canale = f"❓・supporto-{user.name}"
+            categoria = guild.get_channel(CATEGORIA_TICKET_SUPPORTO)
+            staff_role = admin_role
+            titolo_embed = "❓ Supporto Clienti"
+            descrizione = f"Ciao {user.mention}, descrivi pure il tuo problema o la tua domanda. Lo staff ti risponderà al più presto!"
