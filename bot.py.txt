@@ -170,3 +170,4 @@ class TicketSelect(discord.ui.Select):
             staff_role = admin_role
             titolo_embed = "❓ Supporto Clienti"
             descrizione = f"Ciao {user.mention}, descrivi pure il tuo problema o la tua domanda. Lo staff ti risponderà al più presto!"
+TOKEN
