@@ -14,7 +14,7 @@ RUOLO_NOVITA = 157037300526626417
 RUOLO_SPOILER = 1570372876962631762
 
 # ID dei Ruoli Staff (Chi vede i ticket)
-RUOLO_FONDAZIONE = 1569613107909894214            # Vede tutti i ticket
+RUOLO_ADMIN = 1569613107909894214            # Vede tutti i ticket
 RUOLO_GRAPHIC_DESIGNER = 1570378377448136704 # Vede solo ticket Loghi/Banner
 RUOLO_LIVERY_DESIGNER = 1570379574087393341  # Vede solo ticket Livree/Uniformi
 
@@ -170,4 +170,4 @@ class TicketSelect(discord.ui.Select):
             staff_role = admin_role
             titolo_embed = "❓ Supporto Clienti"
             descrizione = f"Ciao {user.mention}, descrivi pure il tuo problema o la tua domanda. Lo staff ti risponderà al più presto!"
-TOKEN
+bot.run(TOKEN)
