@@ -5,7 +5,7 @@ from discord import app_commands
 # ==========================================
 # ⚙️ CONFIGURAZIONE - INSERISCI I TUOI ID QUI
 # ==========================================
-TOKEN = "MTU3MDM3MTUzNDczOTA3OTE3OQ.GX13iQ.KgehycrNWbPSPlouvQRFb7eAyqILNuJR-K2KOk"
+TOKEN = "os.environ.get"
 
 # ID dei Ruoli per Auto-Role
 RUOLO_ANNUNCI = 157037281438334979
